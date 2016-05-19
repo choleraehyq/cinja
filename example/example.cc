@@ -1,5 +1,6 @@
 #include "include/cinja.hpp"
 
+#include <iostream>
 #include <string>
 
 int main() {

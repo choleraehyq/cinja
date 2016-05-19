@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -46,25 +47,27 @@ namespace cinja {
             std::vector<std::string> _vector;
         };
 
-        std::string substitude(std::string raw, std::map<std::string, std::unique_ptr<value>> context) {
-            for (auto s = context.cbegin(); s != context.cend(); s++) {
-                boost::regex r{ "{{[[:space:]]*" + *s.first + "[[:space:]]*}}" };
-                raw = boost::regex_replace(raw, r, *(s.second)->s());
+        std::string substitude(std::string raw, std::map<std::string, std::unique_ptr<value>> &context) {
+            for (std::map<std::string, std::unique_ptr<value>>::iterator s = context.begin(); s != context.end(); s++) {
+                boost::regex r{ "{{[[:space:]]*" + s->first + "[[:space:]]*}}" };
+                raw = boost::regex_replace(raw, r, s->second->s());
             }
             return raw;
         }
         
         class section {
         public:
-            virtual ~section();
-            virtual std::string render(std::map<std::string, std::unique_ptr<value>> &context);
+            virtual ~section() 
+            {}
+            virtual std::string render(std::map<std::string, std::unique_ptr<value>> &context)
+            {}
         };
         
         class forsection: public section {
         public:
-            forsection() {}
+            forsection(): section() {}
             void addChild(std::unique_ptr<section> &&p) {
-                _children.emplace_back(p);
+                _children.emplace_back(std::forward<std::unique_ptr<section>>(p));
             } 
             void setIter(std::string &&iterName, std::string &&iterRange) {
                 this->iterName = iterName;
@@ -93,9 +96,9 @@ namespace cinja {
         
         class ifsection: public section {
         public:
-            ifsection() {}
+            ifsection(): section()  {}
             void addChild(std::unique_ptr<section> &&p) {
-                _children.emplace_back(p);
+                _children.emplace_back(std::forward<std::unique_ptr<section>>(p));
             } 
             void setCondition(std::string &&condition) {
                 this->condition = condition;
@@ -118,7 +121,7 @@ namespace cinja {
         
         class plainsection: public section {
         public:
-            plainsection(std::string &&s): _content(s)
+            plainsection(std::string &&s): section(), _content(s)
             {}     
             std::string render(std::map<std::string, std::unique_ptr<value>> &context) override {
                 return substitude(_content, context);
@@ -158,7 +161,7 @@ namespace cinja {
                 std::string condition{v[1]};
                 auto nextInstrStart{ raw.find("{%", instrEnd) };
                 auto nextInstrEnd{ raw.find("%}", nextInstrStart) };
-                auto retval{ std::make_unique<forsection>() };
+                auto retval{ std::make_unique<ifsection>() };
                 retval->setCondition(std::move(condition));
                 retval->addChild(std::make_unique<plainsection>(raw.substr(instrEnd+2, nextInstrStart-instrEnd-2)));
                 
@@ -203,27 +206,27 @@ namespace cinja {
         
         std::string render() {
             std::string retval;
-            for (auto i: sections) {
-                retval += i->render(_context);
+            for (auto i = _sections.cbegin(); i !=  _sections.cend(); i++) {
+                retval += (*i)->render(_context);
             }
             return retval;
         }
         
         template <typename T, typename = std::enable_if<std::is_arithmetic<T>::value>>
         void setValue(std::string name, T value) {
-            _context.insert(std::make_pair(name, detail::value(value)));
+            _context.insert(std::make_pair(name, std::make_unique<detail::value>(value)));
         }
         
         void setValue(std::string name, std::string value) {
-            _context.insert(std::make_pair(name, detail::value(value)));
+            _context.insert(std::make_pair(name, std::make_unique<detail::value>(value)));
         }
         
         void setValue(std::string name, std::vector<std::string> &value) {
-            _context.insert(std::make_pair(name, detail::value(value)));
+            _context.insert(std::make_pair(name, std::make_unique<detail::value>(value)));
         }
         
         void setValue(std::string name, std::vector<std::string> &&value) {
-            _context.insert(std::make_pair(name, detail::value(value)));
+            _context.insert(std::make_pair(name, std::make_unique<detail::value>(value)));
         } 
         
     private:
