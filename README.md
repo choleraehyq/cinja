@@ -30,6 +30,13 @@ Building prerequisite:
 *  C++ compiler supported C++14
 *  boost library 1.58.0+
 
+Run example:
+```bash
+cd example
+g++ example.cc -I /path/to/cinja -std=c++14 -lboost_regex
+./example
+```
+
 
 Usage
 -----

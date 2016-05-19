@@ -8,11 +8,11 @@ int main() {
 {{name}}\n\
 {{ number  }}\n\
 {{ float}}\n\
-{% if ok %}\n\
-    {% for i in v %}\n\
+{% if ok %}\
+    {% for i in v %}\
         {{i}}\n\
-    {% endfor %}\n\
-{%endif%}\n\
+    {% endfor %}\
+{%endif%}\
 ");
     t.setValue("name", "Hu");
     t.setValue("number", 123);

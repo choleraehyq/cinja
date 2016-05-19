@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <string>
@@ -16,8 +18,9 @@ namespace cinja {
         
         class value {
         public:
-            template <typename T, typename = std::enable_if<std::is_arithmetic<T>::value>>
-            value(T item): _content(boost::lexical_cast<std::string>(item)) {}
+            template <typename T, typename = std::enable_if_t<std::is_arithmetic<T>::value>>
+            value(T item): _content(boost::lexical_cast<std::string>(item)), _isdigit(true) {
+            }
             
             value(std::string &item): _content(item) {}
             
@@ -29,9 +32,11 @@ namespace cinja {
             
             
             bool b() {
-                return (_content.size() != 0 && 
-                        boost::lexical_cast<double>(_content) != 0.0 && 
-                        boost::algorithm::to_upper_copy(_content) != "FALSE");
+                bool retval{ true };
+                if (_content.empty()) retval = false;
+                if (_isdigit && boost::lexical_cast<double>(_content) == 0.0) retval = false;
+                if (boost::algorithm::to_upper_copy(_content) == "FALSE") retval = false;
+                return retval;
             }
             
             std::string s() {
@@ -45,6 +50,7 @@ namespace cinja {
         private:
             std::string _content;
             std::vector<std::string> _vector;
+            bool _isdigit{false};
         };
 
         std::string substitude(std::string raw, std::map<std::string, std::unique_ptr<value>> &context) {
@@ -121,8 +127,8 @@ namespace cinja {
         
         class plainsection: public section {
         public:
-            plainsection(std::string &&s): section(), _content(s)
-            {}     
+            plainsection(std::string &&s): section(), _content(s) { 
+            }     
             std::string render(std::map<std::string, std::unique_ptr<value>> &context) override {
                 return substitude(_content, context);
             }
@@ -135,6 +141,9 @@ namespace cinja {
             std::string instr{raw.substr(instrStart+2, instrEnd-instrStart-2)};
             std::vector<std::string> v;
             boost::algorithm::split(v, instr, boost::algorithm::is_space());
+            v.erase(std::remove_if(v.begin(), v.end(), [](std::string &s) {
+                return s.empty();
+            }), v.end());
             std::unique_ptr<section> ret;
             
             if (v[0] == "for") {
@@ -150,12 +159,13 @@ namespace cinja {
                         raw.substr(nextInstrStart+2, nextInstrEnd-nextInstrStart-2)) != "endfor") {
                     retval->addChild(_parse(raw, pos, nextInstrStart));
                     nextInstrStart = raw.find("{%", pos);
-                    retval->addChild(std::make_unique<plainsection>(raw.substr(pos, nextInstrStart-pos-1)));
+                    if (nextInstrStart > pos)
+                        retval->addChild(std::make_unique<plainsection>(raw.substr(pos, nextInstrStart-pos)));
                     nextInstrEnd = raw.find("%}", pos);           
                 }
                 
                 pos = nextInstrEnd + 2;
-                ret = std::move(retval);      
+                ret = std::move(retval);  
             }
             else if (v[0] == "if") {
                 std::string condition{v[1]};
@@ -167,9 +177,11 @@ namespace cinja {
                 
                 while (boost::algorithm::trim_copy(
                         raw.substr(nextInstrStart+2, nextInstrEnd-nextInstrStart-2)) != "endif") {
+                    
                     retval->addChild(_parse(raw, pos, nextInstrStart));
                     nextInstrStart = raw.find("{%", pos);
-                    retval->addChild(std::make_unique<plainsection>(raw.substr(pos, nextInstrStart-pos-1)));
+                    if (nextInstrStart > pos)
+                        retval->addChild(std::make_unique<plainsection>(raw.substr(pos, nextInstrStart-pos)));
                     nextInstrEnd = raw.find("%}", pos);           
                 }
                 
@@ -194,7 +206,7 @@ namespace cinja {
             size_t pos = 0;
             auto size = raw.size();
             while (pos < size) {
-                auto instrStart = raw.find("{%");
+                auto instrStart = raw.find("{%", pos);
                 if (instrStart == std::string::npos) {
                     _sections.push_back(std::make_unique<detail::plainsection>(raw.substr(pos, raw.size())));
                     break;
